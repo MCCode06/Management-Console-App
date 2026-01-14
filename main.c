@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-int welcome(FILE *file);
+int printMenu(FILE *file);
 int addUser(FILE *file);
 int showUsers(FILE *file);
 FILE *deleteUser(FILE *file);
@@ -11,6 +12,7 @@ void quit();
 
 int searchUser(FILE *file, char userId[]);
 int continuePrompt(FILE *file);
+char *capitalizeName(char *str);
 
 int main(void)
 {
@@ -20,11 +22,12 @@ int main(void)
         printf("Can't open file.\n");
         return 1;
     }
-    int running = 1;
+    srand(time(NULL));
 
-    while (running)
+    printf("Welcome to the User Management System!\n");
+    while (1)
     {
-        int option = welcome(file);
+        int option = printMenu(file);
         switch (option)
         {
         case 1:
@@ -62,16 +65,15 @@ int main(void)
             printf("Invalid option. Please try again.\n");
             break;
         }
-        running = continuePrompt(file);
     }
     fclose(file);
     return 0;
 }
 
-int welcome(FILE *file)
+int printMenu(FILE *file)
 {
     int option;
-    printf("\nWelcome to the User Management System!\n");
+    printf("\n-------------------------\n");
     printf("1. Add User\n");
     printf("2. Show Users\n");
     printf("3. Update User\n");
@@ -85,20 +87,33 @@ int welcome(FILE *file)
 
 int addUser(FILE *file)
 {
-    char userId[10];
+    char userId[5];
     char name[50];
     char surname[50];
     char age[10];
 
-    printf("Enter user ID: ");
-    scanf("%s", userId);
-    printf("Enter user name and surname (ex: Sanani Zeynalli): ");
-    scanf("%s %s", name, surname);
+    do
+    {
+        userId[0] = 'U';
+        for (int i = 1; i < 4; i++)
+        {
+            userId[i] = '0' + rand() % 10;
+        }
+        userId[4] = '\0';
+    } while (searchUser(file, userId) != 0);
+
+    printf("Enter user name: ");
+    scanf("%s", name);
+    printf("Enter user surname: ");
+    scanf("%s", surname);
     printf("Enter user age: ");
     scanf("%s", age);
+    capitalizeName(name);
+    capitalizeName(surname);
+
     for (int i = 0; i < strlen(age); i++)
     {
-        if (age[i] < '0' || age[i] > '9')
+        if (age[i] < '0' || age[i] > '9' || atoi(age) < 6 || atoi(age) > 80)
         {
             printf("Invalid age.\n");
             printf("Enter VALID user age: ");
@@ -160,26 +175,25 @@ FILE *deleteUser(FILE *file)
     file = fopen("users.txt", "a+");
     return file;
 }
-
 FILE *updateUser(FILE *file)
 {
-    rewind(file);
-    char userId[10];
+    char searchId[10];
     printf("Enter user ID to update: ");
-    scanf("%s", userId);
+    scanf("%s", searchId);
+    while (getchar() != '\n')
+        ; // Clear buffer
 
-    int lineNum = searchUser(file, userId);
+    int lineNum = searchUser(file, searchId);
     if (lineNum == 0)
     {
-        printf("User with ID %s not found.\n", userId);
+        printf("User with ID %s not found.\n", searchId);
         return file;
     }
 
-    int currentLine = 1;
-    char line[256];
     rewind(file);
-
     FILE *tempFile = fopen("temp.txt", "w");
+    char line[256];
+    int currentLine = 1;
 
     while (fgets(line, sizeof(line), file))
     {
@@ -187,27 +201,49 @@ FILE *updateUser(FILE *file)
         {
             fputs(line, tempFile);
         }
-        else // addUser logic
+        else
         {
-            char name[50];
-            char surname[50];
-            char age[10];
+            char oldId[10], oldName[50], oldSurname[50], oldAge[10];
+            char newName[50], newSurname[50], newAge[10];
 
-            printf("Enter new user name and surname (ex: Sanani Zeynalli): ");
-            scanf("%s %s", name, surname);
-            printf("Enter new user age: ");
-            scanf("%s", age);
-            for (int i = 0; i < strlen(age); i++)
+            sscanf(line, "%s | %s %s | %s", oldId, oldName, oldSurname, oldAge);
+
+            printf("New Name: ", oldName);
+            fgets(newName, sizeof(newName), stdin);
+            newName[strcspn(newName, "\n")] = 0;
+            if (strlen(newName) == 0)
             {
-                if (age[i] < '0' || age[i] > '9')
+                strcpy(newName, oldName);
+            }
+            printf("New Surname: ", oldSurname);
+            fgets(newSurname, sizeof(newSurname), stdin);
+            newSurname[strcspn(newSurname, "\n")] = 0; // removes newline character
+            if (strlen(newSurname) == 0)
+            {
+                strcpy(newSurname, oldSurname);
+            }
+
+            printf("New Age: ", oldAge);
+            fgets(newAge, sizeof(newAge), stdin);
+            newAge[strcspn(newAge, "\n")] = 0;
+            if (strlen(newAge) == 0)
+            {
+                strcpy(newAge, oldAge);
+            }
+            for (int i = 0; i < strlen(newAge); i++)
+            {
+                if (newAge[i] < '0' || newAge[i] > '9' || atoi(newAge) < 6 || atoi(newAge) > 80)
                 {
-                    printf("Invalid age.\n");
-                    printf("Enter VALID user age: ");
-                    scanf("%s", age);
+                    printf("Invalid age. Please enter a VALID age: ");
+                    fgets(newAge, sizeof(newAge), stdin);
+                    newAge[strcspn(newAge, "\n")] = 0;
                     i = -1; // reset for loop
                 }
             }
-            fprintf(tempFile, "%s | %s %s | %s\n", userId, name, surname, age);
+            capitalizeName(newName);
+            capitalizeName(newSurname);
+
+            fprintf(tempFile, "%s | %s %s | %s\n", oldId, newName, newSurname, newAge);
         }
         currentLine++;
     }
@@ -216,8 +252,7 @@ FILE *updateUser(FILE *file)
     fclose(tempFile);
     remove("users.txt");
     rename("temp.txt", "users.txt");
-    file = fopen("users.txt", "a+");
-    return file;
+    return fopen("users.txt", "a+");
 }
 
 int searchUser(FILE *file, char userId[])
@@ -255,4 +290,20 @@ int continuePrompt(FILE *file)
         return 1;
     }
     return 0;
+}
+
+char *capitalizeName(char *str)
+{
+    if (str[0] >= 'a' && str[0] <= 'z')
+    {
+        str[0] = str[0] - ('a' - 'A');
+    }
+    for (int i = 1; i < strlen(str); i++)
+    {
+        if (str[i] >= 'A' && str[i] <= 'Z')
+        {
+            str[i] = str[i] + ('a' - 'A');
+        }
+    }
+    return str;
 }
